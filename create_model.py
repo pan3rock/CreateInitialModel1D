@@ -47,7 +47,9 @@ def interp_model(model, num_layer, ice_exist=False):
     model = np.asarray(model)
     ret = []
     if ice_exist:
-        ind_start = 1
+        ind_start = 2
+        line = [*model[0, :]]
+        ret.append(line)
     else:
         ind_start = 0
     for i in range(ind_start, model.shape[0]-1):
@@ -59,13 +61,13 @@ def interp_model(model, num_layer, ice_exist=False):
             ret.append(line)
     model2 = np.asarray(ret)
 
-    z_new = np.linspace(model[ind_start, 0], model[-1, 0], num_layer)
+    z_new = np.linspace(model[0, 0], model[-1, 0], num_layer)
     mintp = [interp1d(model2[:, 0], model2[:, i+1], fill_value='extrapolate')
              for i in range(3)]
     model_new = np.asarray([f(z_new) for f in mintp]).T
     model_new = np.hstack([z_new.reshape(-1, 1), model_new])
-    if ice_exist:
-        model_new = np.vstack([model[0, :].reshape(1, -1), model_new])
+    # if ice_exist:
+    #     model_new = np.vstack([model[0, :].reshape(1, -1), model_new])
     return model_new
 
 
@@ -149,7 +151,7 @@ def main():
     for lat, lon in stations:
         dist, _, _ = gps2dist_azimuth(lat, lon, c_lat, c_lon)
         dists.append(dist)
-    weight1 = np.asarray(dists) / np.sum(dists)
+    weight1 = 1.0 / np.asarray(dists)
 
     cms = []
     weight = []
@@ -161,9 +163,9 @@ def main():
         plt.step(cm[:, 1], cm[:, 0])
         dmax_crust = cm[-1, 0]
         itm = np.argwhere(mean_model[:, 0] > dmax_crust)[0][0]
-        ibm = np.argwhere(mean_model[:, 0] <= 50.0)[-1][0]
+        ibm = np.argwhere(mean_model[:, 0] <= 60.0)[-1][0]
         if ibm > itm:
-            cm_ext = mean_model[itm:ibm+1, :]
+            cm_ext = mean_model[itm:ibm, :]
             cm = np.vstack([cm, cm_ext])
         cm2 = extend_model(cm)
         cm = interp_model(cm2, nc, ice_exist)
@@ -172,10 +174,12 @@ def main():
     cms = np.asarray(cms)
     cm = np.zeros((cms.shape[1], cms.shape[2]))
     cm[:, 0] = cms[0, :, 0]
+    weight = np.asarray(weight)
+    weight = weight / weight.sum()
     for i in range(3):
         cm[:, 1+i] = np.average(cms[:, :, 1+i], weights=weight, axis=0)
 
-    itm = np.argwhere(mean_model[:, 0] <= 50.0)[-1][0]
+    itm = np.argwhere(mean_model[:, 0] <= 60.0)[-1][0]
     ibm = np.argwhere(mean_model[:, 0] < zmax*1.2)[-1][0]
     mm = mean_model[itm:ibm, :]
     mm = extend_model(mm)
