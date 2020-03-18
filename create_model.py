@@ -46,7 +46,11 @@ def load_crust1():
 def interp_model(model, num_layer, ice_exist=False):
     model = np.asarray(model)
     ret = []
-    for i in range(model.shape[0]-1):
+    if ice_exist:
+        ind_start = 1
+    else:
+        ind_start = 0
+    for i in range(ind_start, model.shape[0]-1):
         if i % 2 == 0:
             line = [model[i:i+2, 0].sum()/2.0, *model[i, 1:]]
             ret.append(line)
@@ -55,11 +59,13 @@ def interp_model(model, num_layer, ice_exist=False):
             ret.append(line)
     model2 = np.asarray(ret)
 
-    z_new = np.linspace(model[0, 0], model[-1, 0], num_layer)
+    z_new = np.linspace(model[ind_start, 0], model[-1, 0], num_layer)
     mintp = [interp1d(model2[:, 0], model2[:, i+1], fill_value='extrapolate')
              for i in range(3)]
     model_new = np.asarray([f(z_new) for f in mintp]).T
     model_new = np.hstack([z_new.reshape(-1, 1), model_new])
+    if ice_exist:
+        model_new = np.vstack([model[0, :].reshape(1, -1), model_new])
     return model_new
 
 
@@ -77,7 +83,7 @@ def find_crust(crust_model, lat, lon, num_layer):
     if cm['bnds'][0] != cm['bnds'][1]:
         # water exists
         print("Water layer exists at ({:9.2f}, {:9.2f})".format(lat, lon))
-        return None
+        return None, False
 
     ret = []
     depth = 0.
@@ -143,11 +149,16 @@ def main():
     for lat, lon in stations:
         dist, _, _ = gps2dist_azimuth(lat, lon, c_lat, c_lon)
         dists.append(dist)
-    weight = np.asarray(dists) / np.sum(dists)
+    weight1 = np.asarray(dists) / np.sum(dists)
 
     cms = []
-    for lat, lon in stations:
+    weight = []
+    for i, (lat, lon) in enumerate(stations):
         cm, ice_exist = find_crust(crust_model, lat, lon, nc)
+        if cm is None:
+            continue
+        weight.append(weight1[i])
+        plt.step(cm[:, 1], cm[:, 0])
         dmax_crust = cm[-1, 0]
         itm = np.argwhere(mean_model[:, 0] > dmax_crust)[0][0]
         ibm = np.argwhere(mean_model[:, 0] <= 50.0)[-1][0]
@@ -157,6 +168,7 @@ def main():
         cm2 = extend_model(cm)
         cm = interp_model(cm2, nc, ice_exist)
         cms.append(cm)
+    plt.gca().invert_yaxis()
     cms = np.asarray(cms)
     cm = np.zeros((cms.shape[1], cms.shape[2]))
     cm[:, 0] = cms[0, :, 0]
