@@ -15,5 +15,5 @@ S-velocity zone less than 4.5 km/s.
 python ../create_model.py station.txt --nc 20 --nm 20
 
 # second example
-python ../interpolate_model.py mi_raw.txt --zc 90 --zm 200 --dz 2.0 4.0
+python ../interpolate_model.py mi_raw.txt --zc 90 --zm 200 --dz 2.0 4.0 --smooth 0.7
 ```
