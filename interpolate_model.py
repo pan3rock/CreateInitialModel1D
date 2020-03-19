@@ -3,6 +3,7 @@ import argparse
 import matplotlib.pyplot as plt
 import os
 from scipy.interpolate import interp1d, UnivariateSpline
+from scipy.ndimage import gaussian_filter1d
 
 
 if __name__ == '__main__':
@@ -18,26 +19,32 @@ if __name__ == '__main__':
                         help='number of layers for the mantle')
     parser.add_argument('--dz', nargs=2, type=float,
                         help='dz for crust and dz_max for mantle')
-    parser.add_argument('--smooth', type=float, default=None)
+    parser.add_argument('--smooth', type=int, default=None)
+    parser.add_argument('--ice', type=float, default=None)
     args = parser.parse_args()
     file_model_raw = args.model_raw
     zc = args.zc
     zm = args.zm
     dz = args.dz
     smooth = args.smooth
+    ice = args.ice
 
     model_raw = np.loadtxt(file_model_raw)
     z = model_raw[:, 1]
 
-    intp = [UnivariateSpline(z, model_raw[:, i], ext=0, k=2)
+    intp = [interp1d(z, model_raw[:, i], fill_value='extrapolate')
             for i in range(2, 5)]
-    if smooth is None:
-        smooth = len(z)
-    for spl in intp:
-        spl.set_smoothing_factor(smooth)
+    z0 = np.linspace(z[0], z[-1], 100)
+    mi = [f(z0) for f in intp]
+    ms = [gaussian_filter1d(x, smooth) for x in mi]
+    intp = [interp1d(z0, s, fill_value='extrapolate') for s in ms]
 
     ind_c = np.argwhere(z > zc)[0][0]
-    z1 = np.arange(0, zc+dz[0], dz[0])
+    if ice is None:
+        zmin = 0.
+    else:
+        zmin = ice
+    z1 = np.arange(zmin, zc+dz[0], dz[0])
     nc = len(z1)
 
     ind_m = np.argwhere(z < zc)[-1][0]
@@ -56,9 +63,13 @@ if __name__ == '__main__':
     mm_new.extend([f(z) for f in intp])
     model_new = np.asarray(mm_new).T
 
+    if ice is not None:
+        line_ice = np.asarray([1.0, 0.0, 0.92, 1.94, 3.81]).reshape(1, -1)
+        model_new = np.vstack([line_ice, model_new])
+
     with open('mi_new.txt', 'w') as fp:
         for n, *para in model_new:
-            contents = ('{:5d}' + '{:10.4f}'*4).format(int(n), *para)
+            contents = ('{:5d}' + '{:12.4f}'*4).format(int(n), *para)
             fp.write(contents + '\n')
             print(contents)
 
